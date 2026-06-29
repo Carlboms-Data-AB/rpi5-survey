@@ -60,17 +60,7 @@ echo ""
 
 # ── Stop write-heavy containers for consistent snapshot ──────────────────────
 
-echo ">>> Stopping write-heavy containers..."
 CONTAINERS_STOPPED=()
-for c in node-red influxdb; do
-    if docker inspect --format='{{.State.Running}}' "$c" 2>/dev/null | grep -q true; then
-        docker stop "$c"
-        CONTAINERS_STOPPED+=("$c")
-        echo "    Stopped: $c"
-    else
-        echo "    Skipped: $c (not running)"
-    fi
-done
 
 cleanup() {
     if [[ ${#CONTAINERS_STOPPED[@]} -gt 0 ]]; then
@@ -83,6 +73,17 @@ cleanup() {
     rm -f "$EXCLUDE_FILE"
 }
 trap cleanup EXIT
+
+echo ">>> Stopping write-heavy containers..."
+for c in node-red influxdb; do
+    if docker inspect --format='{{.State.Running}}' "$c" 2>/dev/null | grep -q true; then
+        docker stop "$c"
+        CONTAINERS_STOPPED+=("$c")
+        echo "    Stopped: $c"
+    else
+        echo "    Skipped: $c (not running)"
+    fi
+done
 
 sync
 sleep 2

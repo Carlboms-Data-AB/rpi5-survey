@@ -19,6 +19,7 @@ set -euo pipefail
 
 NVME="/dev/nvme0n1"
 MNT="/mnt/nas-burn"
+CREDS_FILE="/tmp/.rpi-burn-creds-$$"
 MOUNTED_HERE=false
 
 cleanup() {
@@ -27,6 +28,7 @@ cleanup() {
         umount "$MNT" 2>/dev/null || true
         rmdir "$MNT" 2>/dev/null || true
     fi
+    rm -f "$CREDS_FILE"
 }
 trap cleanup EXIT
 
@@ -79,11 +81,12 @@ elif [[ "$INPUT" == //* ]]; then
     fi
 
     read -rp "NAS username (or press Enter for guest): " NAS_USER
-    MOUNT_OPTS="ro"
     if [[ -n "$NAS_USER" ]]; then
         read -rsp "NAS password: " NAS_PASS
         echo ""
-        MOUNT_OPTS="ro,username=$NAS_USER,password=$NAS_PASS"
+        printf 'username=%s\npassword=%s\n' "$NAS_USER" "$NAS_PASS" > "$CREDS_FILE"
+        chmod 600 "$CREDS_FILE"
+        MOUNT_OPTS="ro,credentials=$CREDS_FILE"
     else
         MOUNT_OPTS="ro,guest"
     fi
