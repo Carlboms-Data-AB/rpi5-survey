@@ -9,7 +9,7 @@
 # Keeps all config, identity, OS, Docker containers, and dashboards.
 #
 # Usage:
-#   sudo ./rpi-clone.sh [output_path]
+#   sudo ./rpi-clone.sh [output_directory]
 #
 # Default output: /DATA/rpi-clone-<hostname>-<date>.img
 
@@ -19,16 +19,17 @@ set -euo pipefail
 
 HOSTNAME="$(hostname)"
 DATE="$(date +%Y%m%d-%H%M%S)"
-EXCLUDE_FILE="/tmp/rpi-clone-excludes.txt"
-BIND_MNT="/mnt/clone-output"
-BIND_MOUNTED=false
+IMG_NAME="rpi-clone-${HOSTNAME}-${DATE}.img"
+OUT_DIR="${1:-/DATA}"
+IMG_REAL="${OUT_DIR}/${IMG_NAME}"
 
 # image-backup requires output under /mnt/ or /media/.
-# Bind-mount the real output directory there so the file stays on local storage.
-IMG_REAL="${1:-/DATA/rpi-clone-${HOSTNAME}-${DATE}.img}"
-IMG_DIR="$(dirname "$IMG_REAL")"
-IMG_NAME="$(basename "$IMG_REAL")"
-IMG="${BIND_MNT}/${IMG_NAME}"
+# Create a symlink so the string check passes; the file stays on local storage.
+LINK="/mnt/.clone-link-$$"
+ln -sfn "$OUT_DIR" "$LINK"
+IMG="${LINK}/${IMG_NAME}"
+
+EXCLUDE_FILE="/tmp/rpi-clone-excludes.txt"
 
 echo "=== RPi 5 NVMe Clone ==="
 echo "Host:   $HOSTNAME"
@@ -58,9 +59,8 @@ cat > "$EXCLUDE_FILE" <<EXCLUDES
 # MinIO CAN edge2 bucket data
 /DATA/AppData/big-bear-minio/can-edge2/
 
-# The output image itself (both real and bind-mount paths)
+# The output image itself
 ${IMG_REAL}
-${IMG}
 EXCLUDES
 
 echo ">>> Exclude list:"
@@ -79,11 +79,7 @@ cleanup() {
             docker start "$c" && echo "    Started: $c"
         done
     fi
-    if $BIND_MOUNTED; then
-        umount "$BIND_MNT" 2>/dev/null || true
-        rmdir "$BIND_MNT" 2>/dev/null || true
-    fi
-    rm -f "$EXCLUDE_FILE"
+    rm -f "$LINK" "$EXCLUDE_FILE"
 }
 trap cleanup EXIT
 
@@ -101,12 +97,6 @@ done
 sync
 sleep 2
 
-# ── Bind-mount output directory under /mnt/ (image-backup requirement) ───────
-
-mkdir -p "$BIND_MNT"
-mount --bind "$IMG_DIR" "$BIND_MNT"
-BIND_MOUNTED=true
-
 # ── Run image-backup ─────────────────────────────────────────────────────────
 
 echo ""
@@ -119,6 +109,4 @@ echo "=== Clone complete ==="
 echo "Image: $IMG_REAL"
 echo "Size:  $(du -h "$IMG_REAL" | cut -f1)"
 echo ""
-echo "Next steps:"
-echo "  1. Copy the image to your NAS:  scp $IMG_REAL user@nas:/path/"
-echo "  2. Flash to a blank NVMe with:  sudo ./rpi-burn.sh $IMG_REAL"
+echo "Next: copy the image off the Pi, then flash with rpi-burn.sh"

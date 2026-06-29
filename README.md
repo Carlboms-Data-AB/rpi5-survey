@@ -31,7 +31,7 @@ sudo ./rpi-clone.sh
 This will:
 - Install [RonR image-backup](https://github.com/seamusdemora/RonR-RPi-image-utils) if not present
 - Stop Node-RED, InfluxDB, and MinIO for a consistent snapshot
-- Create a content-sized `.img` at `/DATA/rpi-clone-<hostname>-<date>.img`
+- Create a content-sized `.img` at `/DATA/rpi-clone-<hostname>-<date>.img` (saved locally on the NVMe)
 - Restart the stopped containers
 - Auto-resize is baked in — the root partition expands on first boot
 
