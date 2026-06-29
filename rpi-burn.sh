@@ -63,7 +63,7 @@ INPUT="${1:-}"
 
 if [[ -z "$INPUT" ]]; then
     # Interactive: ask for NAS share
-    read -rp "NAS share path (e.g. //192.168.1.10/backups): " INPUT
+    read -rp "NAS share path (e.g. //NAS-IP/backups): " INPUT
     echo ""
 fi
 

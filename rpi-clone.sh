@@ -24,15 +24,20 @@ DATE="$(date +%Y%m%d-%H%M%S)"
 OUT_DIR="${1:-/DATA}"
 IMG="${OUT_DIR}/rpi-clone-${HOSTNAME}-${DATE}.img"
 
+# ===== Customize for your deployment =====================================
+# Containers stopped briefly during the snapshot (write-heavy services).
 STOP_CONTAINERS=(node-red influxdb minio)
 
-# Bulk dirs to exclude (absolute paths, anchored to / in rsync)
+# Bulk data dirs to EXCLUDE from the clone (absolute paths, globs allowed).
+# Keep only the large, regenerable/bulk data here — config and identity are
+# kept by default. Edit these to match your apps.
 EXCLUDES=(
-    /DATA/AppData/influxdb/data/engine
-    "/DATA/AppData/influxdb/data/backup_*"
-    /DATA/AppData/big-bear-minio/can-edge2
-    /var/swap
+    /DATA/AppData/influxdb/data/engine          # InfluxDB TSM data (keeps bolt/sqlite/config)
+    "/DATA/AppData/influxdb/data/backup_*"      # InfluxDB backup dirs
+    /DATA/AppData/minio/EXAMPLE-large-bucket    # <-- replace with your bulk object-store bucket(s)
+    /var/swap                                   # swapfile (regenerated on boot)
 )
+# =========================================================================
 
 MNT="/mnt/rpi-clone-root"
 
@@ -45,7 +50,7 @@ human() {
 
 ROOT_PART_DEV="$(findmnt -no SOURCE /)"            # e.g. /dev/nvme0n1p2
 SRC_DISK="/dev/$(lsblk -no PKNAME "$ROOT_PART_DEV" | head -1)"  # /dev/nvme0n1
-DISK_ID="$(sfdisk --disk-id "$SRC_DISK")"          # e.g. 0x59795b20
+DISK_ID="$(sfdisk --disk-id "$SRC_DISK")"          # e.g. 0xXXXXXXXX
 
 P1_LINE="$(sfdisk -d "$SRC_DISK" | grep "${SRC_DISK}p1")"
 P2_LINE="$(sfdisk -d "$SRC_DISK" | grep "${SRC_DISK}p2")"
