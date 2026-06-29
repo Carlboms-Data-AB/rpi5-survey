@@ -1,37 +1,87 @@
 # rpi5-survey
 
-Read-only diagnostic script for Raspberry Pi 5 units booting from NVMe (no SD card) running CasaOS with Docker.
+Tools for cloning Raspberry Pi 5 units (NVMe boot, CasaOS/Docker) into bootable cold-spare images.
 
-Collects the system inventory needed to plan a full bootable NVMe clone/ghost image.
+## Scripts
 
-## What it gathers
+| Script | Run on | Purpose |
+|--------|--------|---------|
+| `rpi-survey.sh` | Production Pi | Read-only diagnostic — gathers partition layout, boot config, disk usage |
+| `rpi-clone.sh` | Production Pi | Creates a bootable `.img` clone, excluding bulk data |
+| `rpi-burn.sh` | Backup Pi (SD card boot) | Flashes the `.img` to a blank NVMe drive |
 
-- Model, OS version, kernel, bootloader/EEPROM status
-- Partition table (GPT vs MBR), filesystem types, PARTUUIDs
-- `/etc/fstab`, `cmdline.txt`, `config.txt`
-- Disk usage breakdown (top-level and `/DATA/AppData`)
-- InfluxDB data/config paths and sizes
-- Docker containers, volumes, and CasaOS version
-- Swap, hostname, machine-id, memory
+## Full workflow
 
-## Usage
-
-SSH into the Pi and run:
+### 1. Survey (one-time, already done)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Carlboms-Data-AB/rpi5-survey/main/rpi-survey.sh | sudo bash
 ```
 
-Or download first:
+### 2. Clone (on production Pi)
+
+SSH into the production Pi and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Carlboms-Data-AB/rpi5-survey/main/rpi-survey.sh -o rpi-survey.sh
-chmod +x rpi-survey.sh
-sudo ./rpi-survey.sh
+curl -fsSL https://raw.githubusercontent.com/Carlboms-Data-AB/rpi5-survey/main/rpi-clone.sh -o rpi-clone.sh
+chmod +x rpi-clone.sh
+sudo ./rpi-clone.sh
 ```
 
-Output is printed to the screen and saved to `/tmp/rpi-survey-<hostname>-<timestamp>.txt`.
+This will:
+- Install [RonR image-backup](https://github.com/seamusdemora/RonR-RPi-image-utils) if not present
+- Stop Node-RED and InfluxDB for a consistent snapshot
+- Create a content-sized `.img` at `/DATA/rpi-clone-<hostname>-<date>.img`
+- Restart the stopped containers
+- Auto-resize is baked in — the root partition expands on first boot
+
+**What's excluded** (bulk data only — all config/identity is kept):
+- `/DATA/AppData/influxdb/data/engine/` — time-series bulk data
+- `/DATA/AppData/influxdb/data/backup_*/` — InfluxDB backup dirs
+- `/DATA/AppData/big-bear-minio/can-edge2/` — CAN log bucket
+
+**Estimated image size**: ~13–18 GB (vs 143 GB total used on pi-gateway)
+
+Custom output path: `sudo ./rpi-clone.sh /path/to/output.img`
+
+### 3. Copy image to NAS
+
+```bash
+scp /DATA/rpi-clone-*.img user@nas:/path/to/backups/
+```
+
+### 4. Copy image to backup Pi
+
+Boot the backup RPi 5 from an SD card with Raspberry Pi OS. Copy the image from NAS:
+
+```bash
+scp user@nas:/path/to/backups/rpi-clone-pi-gateway-*.img /tmp/
+```
+
+### 5. Burn (on backup Pi)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Carlboms-Data-AB/rpi5-survey/main/rpi-burn.sh -o rpi-burn.sh
+chmod +x rpi-burn.sh
+sudo ./rpi-burn.sh /tmp/rpi-clone-pi-gateway-*.img
+```
+
+This will:
+- Detect the NVMe drive (`/dev/nvme0n1`)
+- Confirm before erasing
+- Flash the image with `dd`
+- The root filesystem auto-expands on first boot
+
+### 6. Boot from NVMe
+
+1. `sudo poweroff`
+2. Remove the SD card
+3. Power on — the Pi boots from NVMe
+4. Verify: `df -h` (root partition should fill the entire drive)
 
 ## Safety
 
-The script is strictly read-only — it makes no writes to the system disk. A few commands use `sudo` for reading protected paths (partition tables, `/DATA` directory sizes).
+- `rpi-survey.sh` and `rpi-burn.sh` are read-only / write-to-NVMe-only
+- `rpi-clone.sh` briefly stops Node-RED and InfluxDB (auto-restarts on completion or failure)
+- `rpi-burn.sh` refuses to write to the current boot disk
+- Cold spares only — identical PARTUUID/hostname, never run alongside the original
