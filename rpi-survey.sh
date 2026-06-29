@@ -113,8 +113,9 @@ main() {
     echo "excluded total:   $(human "$EXC_TOTAL")"
     INCLUDED=$((ROOT_USED - EXC_TOTAL))
     echo "INCLUDED (copied): $(human "$INCLUDED")"
-    # image root partition = included + 15% + 1 GiB headroom
-    ROOT_PART=$(awk -v i="$INCLUDED" 'BEGIN{printf "%d", i*1.15 + 1073741824}')
+    # image root partition = included + 15% + 1 GiB headroom.
+    # Pure bash 64-bit arithmetic — awk printf %d overflows on mawk (Debian).
+    ROOT_PART=$(( INCLUDED * 115 / 100 + 1073741824 ))
     BOOT_PART=$((512 * 1024 * 1024))
     IMG_SIZE=$((ROOT_PART + BOOT_PART))
     echo "projected .img:    $(human "$IMG_SIZE")  (boot 512 MiB + root $(human "$ROOT_PART"))"

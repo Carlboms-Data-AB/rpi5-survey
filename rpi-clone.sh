@@ -76,8 +76,10 @@ for pat in "${EXCLUDES[@]}"; do
 done
 
 INCLUDED=$((ROOT_USED - EXC_TOTAL))
-# root partition = included + 15% + 1 GiB headroom, aligned up to 1 MiB
-ROOT_PART_BYTES="$(awk -v i="$INCLUDED" 'BEGIN{printf "%d", i*1.15 + 1073741824}')"
+# root partition = included + 15% + 1 GiB headroom, aligned up to 1 MiB.
+# Pure bash 64-bit arithmetic — do NOT use awk printf %d here (mawk on
+# Debian truncates to 32-bit and overflows above ~2 GiB).
+ROOT_PART_BYTES=$(( INCLUDED * 115 / 100 + 1073741824 ))
 ROOT_SECTORS=$(( (ROOT_PART_BYTES + 511) / 512 ))
 ROOT_SECTORS=$(( (ROOT_SECTORS + 2047) / 2048 * 2048 ))   # align to 1 MiB
 ROOT_PART_BYTES=$((ROOT_SECTORS * 512))
