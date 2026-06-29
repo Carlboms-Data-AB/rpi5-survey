@@ -29,18 +29,24 @@ sudo ./rpi-clone.sh
 ```
 
 This will:
-- Install [RonR image-backup](https://github.com/seamusdemora/RonR-RPi-image-utils) if not present
+- Calculate the image size from **actual included data** (root used − excluded bulk dirs) and print it before copying
 - Stop Node-RED, InfluxDB, and MinIO for a consistent snapshot
-- Create a content-sized `.img` at `/DATA/rpi-clone-<hostname>-<date>.img` (saved locally on the NVMe)
+- Build a raw `.img` from scratch (loopback + rsync) at `/DATA/rpi-clone-<hostname>-<date>.img`, saved locally on the NVMe
+- Replicate the MBR table with the **same disk-id** so PARTUUIDs match `fstab`/`cmdline.txt` unchanged
+- Install a first-boot systemd service that auto-expands the root partition + filesystem
 - Restart the stopped containers
-- Auto-resize is baked in — the root partition expands on first boot
+
+It uses no external imaging tool — just `sfdisk`, `losetup`, `mkfs`, and `rsync`, all standard on Raspberry Pi OS.
 
 **What's excluded** (bulk data only — all config/identity is kept):
 - `/DATA/AppData/influxdb/data/engine/` — time-series bulk data
 - `/DATA/AppData/influxdb/data/backup_*/` — InfluxDB backup dirs
 - `/DATA/AppData/big-bear-minio/can-edge2/` — CAN log bucket
+- `/var/swap` — swapfile (regenerated automatically on boot)
 
-**Estimated image size**: ~13–18 GB (vs 143 GB total used on pi-gateway)
+**Image size** = included data + ~15% + 1 GiB headroom. Measured examples:
+- raspberrypi5: 142 GiB used − 112 GiB excluded → ~30 GiB included → **~35 GiB image**
+- Run the survey's "CLONE SIZE ESTIMATE" section to see the exact number for any unit.
 
 Custom output directory: `sudo ./rpi-clone.sh /other/dir` (default: `/DATA`)
 

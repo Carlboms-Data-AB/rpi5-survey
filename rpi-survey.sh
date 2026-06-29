@@ -74,6 +74,50 @@ main() {
     echo "hostname:   $(hostname)"
     echo "machine-id: $(cat /etc/machine-id 2>/dev/null)"
     free -h
+
+    section "PARTITION GEOMETRY (for clone)"
+    echo "disk-id:    $(sudo sfdisk --disk-id "$DISK" 2>/dev/null)"
+    sudo sfdisk -d "$DISK" 2>/dev/null
+
+    section "CLONE SIZE ESTIMATE"
+    # These are the bulk dirs the clone will EXCLUDE.
+    EXCLUDES=(
+        /DATA/AppData/influxdb/data/engine
+        /DATA/AppData/big-bear-minio/can-edge2
+        /var/swap
+    )
+    # backup_* dirs are also excluded (glob)
+    for d in /DATA/AppData/influxdb/data/backup_*; do
+        [ -d "$d" ] && EXCLUDES+=("$d")
+    done
+
+    human() {
+        awk -v b="$1" 'BEGIN{split("B KiB MiB GiB TiB",u," ");i=1;
+            while(b>=1024&&i<5){b/=1024;i++}printf "%.1f %s",b,u[i]}'
+    }
+
+    ROOT_USED=$(df -B1 --output=used / 2>/dev/null | tail -1 | tr -d ' ')
+    echo "root used:        $(human "$ROOT_USED")"
+    EXC_TOTAL=0
+    echo "excluded dirs:"
+    for d in "${EXCLUDES[@]}"; do
+        if [ -e "$d" ]; then
+            s=$(sudo du -sB1 --one-file-system "$d" 2>/dev/null | cut -f1)
+            s=${s:-0}
+            EXC_TOTAL=$((EXC_TOTAL + s))
+            printf '  %-50s %s\n' "$d" "$(human "$s")"
+        else
+            printf '  %-50s (absent)\n' "$d"
+        fi
+    done
+    echo "excluded total:   $(human "$EXC_TOTAL")"
+    INCLUDED=$((ROOT_USED - EXC_TOTAL))
+    echo "INCLUDED (copied): $(human "$INCLUDED")"
+    # image root partition = included + 15% + 1 GiB headroom
+    ROOT_PART=$(awk -v i="$INCLUDED" 'BEGIN{printf "%d", i*1.15 + 1073741824}')
+    BOOT_PART=$((512 * 1024 * 1024))
+    IMG_SIZE=$((ROOT_PART + BOOT_PART))
+    echo "projected .img:    $(human "$IMG_SIZE")  (boot 512 MiB + root $(human "$ROOT_PART"))"
 }
 
 echo "This script uses sudo for a few read-only commands; you may be prompted now."
