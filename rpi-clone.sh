@@ -24,20 +24,18 @@ DATE="$(date +%Y%m%d-%H%M%S)"
 OUT_DIR="${1:-/DATA}"
 IMG="${OUT_DIR}/rpi-clone-${HOSTNAME}-${DATE}.img"
 
-# ===== Customize for your deployment =====================================
 # Containers stopped briefly during the snapshot (write-heavy services).
 STOP_CONTAINERS=(node-red influxdb minio)
 
 # Bulk data dirs to EXCLUDE from the clone (absolute paths, globs allowed).
-# Keep only the large, regenerable/bulk data here — config and identity are
-# kept by default. Edit these to match your apps.
+# Everything else is kept (OS, boot, Docker layers, dashboards, and the
+# InfluxDB/MinIO config + identity that live outside these dirs).
 EXCLUDES=(
     /DATA/AppData/influxdb/data/engine          # InfluxDB TSM data (keeps bolt/sqlite/config)
     "/DATA/AppData/influxdb/data/backup_*"      # InfluxDB backup dirs
-    /DATA/AppData/minio/EXAMPLE-large-bucket    # <-- replace with your bulk object-store bucket(s)
+    /DATA/AppData/big-bear-minio/can-edge2      # MinIO CAN log bucket
     /var/swap                                   # swapfile (regenerated on boot)
 )
-# =========================================================================
 
 MNT="/mnt/rpi-clone-root"
 

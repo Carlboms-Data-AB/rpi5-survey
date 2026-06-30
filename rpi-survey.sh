@@ -80,11 +80,10 @@ main() {
     sudo sfdisk -d "$DISK" 2>/dev/null
 
     section "CLONE SIZE ESTIMATE"
-    # Bulk dirs the clone will EXCLUDE — keep this list in sync with the
-    # EXCLUDES block in rpi-clone.sh. Edit to match your apps.
+    # Bulk dirs the clone will EXCLUDE — keep in sync with EXCLUDES in rpi-clone.sh.
     EXCLUDES=(
         /DATA/AppData/influxdb/data/engine          # InfluxDB TSM data
-        /DATA/AppData/minio/EXAMPLE-large-bucket    # <-- replace with your bulk bucket(s)
+        /DATA/AppData/big-bear-minio/can-edge2      # MinIO CAN log bucket
         /var/swap
     )
     # backup_* dirs are also excluded (glob)

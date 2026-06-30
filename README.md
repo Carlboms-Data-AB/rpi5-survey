@@ -4,10 +4,9 @@ Maintenance toolkit for Raspberry Pi 5 units that boot from NVMe and run
 CasaOS / Docker. Survey a unit, clone it into a bootable cold-spare image,
 flash that image to a blank NVMe, and keep drives healthy.
 
-> **Configure before use.** The clone excludes and the list of containers to
-> stop are deployment-specific. Edit the clearly-marked `EXCLUDES` /
-> `STOP_CONTAINERS` blocks near the top of `rpi-clone.sh` (and the matching
-> `EXCLUDES` in `rpi-survey.sh`) to match your own apps and bulk data.
+The commands below are runnable as-is. The clone's bulk-data excludes and the
+list of containers to stop live in plain arrays near the top of `rpi-clone.sh`
+(and `rpi-survey.sh`) — adjust them there if your apps differ.
 
 ## Scripts
 
@@ -48,10 +47,14 @@ This will:
 No external imaging tool — just `sfdisk`, `losetup`, `mkfs`, and `rsync`, all
 standard on Raspberry Pi OS.
 
-**What's kept vs excluded.** Everything is kept except the bulk dirs you list in
-`EXCLUDES`. Typical excludes are large time-series engines and object-store
-buckets; the corresponding metadata/config (e.g. InfluxDB `influxd.bolt` /
-`influxd.sqlite`, MinIO `.minio.sys`) sits outside those dirs and is preserved.
+**What's excluded** (bulk data only — all config/identity is kept):
+- `/DATA/AppData/influxdb/data/engine/` — InfluxDB time-series bulk data
+- `/DATA/AppData/influxdb/data/backup_*/` — InfluxDB backup dirs
+- `/DATA/AppData/big-bear-minio/can-edge2/` — MinIO CAN log bucket
+- `/var/swap` — swapfile (regenerated on boot)
+
+The kept metadata/config (InfluxDB `influxd.bolt` / `influxd.sqlite`, MinIO
+`.minio.sys`) lives outside those dirs, so it's preserved automatically.
 
 **Image size** = included data + ~15% + 1 GiB headroom. It scales with whatever
 is on disk at clone time, so it varies between runs.
@@ -66,7 +69,8 @@ Mount the image read-only and confirm structure and your KEEP/EXCLUDE choices:
 IMG=/DATA/rpi-clone-<hostname>-<date>.img
 LOOP=$(sudo losetup -f --show -P "$IMG")
 sudo mkdir -p /mnt/verify && sudo mount ${LOOP}p2 /mnt/verify
-sudo ls -la /mnt/verify/DATA/AppData/<app>/      # spot-check kept config / excluded bulk
+sudo ls -la /mnt/verify/DATA/AppData/influxdb/data/   # influxd.bolt + influxd.sqlite present, engine ABSENT
+sudo ls -la /mnt/verify/DATA/AppData/big-bear-minio/  # .minio.sys present, can-edge2 ABSENT
 sudo umount /mnt/verify && sudo losetup -d "$LOOP" && sudo rmdir /mnt/verify
 ```
 
